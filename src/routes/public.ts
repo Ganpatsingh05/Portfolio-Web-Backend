@@ -11,7 +11,7 @@ router.get('/personal-info', async (req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('personal_info')
-      .select('*')
+      .select('*')  
       .limit(1)
       .single();
     if (error) throw error;

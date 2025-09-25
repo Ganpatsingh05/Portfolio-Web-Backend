@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import chalk from 'chalk';
 
 // Import routes
 import projectsRouter from './routes/projects';
@@ -32,6 +33,30 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
+
+// Logging middleware FIRST
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    const end = process.hrtime.bigint();
+    const durationMs = Number(end - start) / 1e6;
+
+    let statusColor = chalk.green;
+    if (res.statusCode >= 400 && res.statusCode < 500) statusColor = chalk.yellow;
+    if (res.statusCode >= 500) statusColor = chalk.red;
+
+    console.log(
+      `${chalk.cyan('API')} ${chalk.gray('|')} ` +
+      `${chalk.magenta(req.method)} ${chalk.white(req.originalUrl)} ` +
+      `${chalk.gray('|')} Status: ${statusColor(res.statusCode)} ` +
+      `${chalk.gray('|')} ${chalk.blue(durationMs.toFixed(2) + ' ms')} ` +
+      `${chalk.gray('|')} Time: ${chalk.gray(new Date().toISOString())}`
+    );
+  });
+
+  next();
+});
+
 
 // ================= CORS CONFIGURATION =================
 // Enhanced: captures derived allowed origins for diagnostics & provides optional ALLOW_LOCALHOST override

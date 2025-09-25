@@ -18,6 +18,7 @@ if (process.env.NODE_ENV === 'production' && !JWT_SECRET) {
 // Helper: compute public base URL
 const getBaseUrl = (req: Request): string => {
   const envUrl = process.env.PUBLIC_BASE_URL;
+  console.log(envUrl);
   if (envUrl) return envUrl.replace(/\/$/, '');
   const proto = (req.get('x-forwarded-proto') || req.protocol || 'http').toString();
   const host = (req.get('x-forwarded-host') || req.get('host')) as string | undefined;
