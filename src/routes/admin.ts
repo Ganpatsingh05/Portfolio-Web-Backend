@@ -673,78 +673,130 @@ router.put('/personal-info', authenticateAdmin, [
 
 // ==================== RESUME UPLOAD ====================
 
-// Upload resume (PDF) - Admin only
+// Upload resume (PDF) - Admin only using Supabase Storage
 router.post('/upload/resume', authenticateAdmin, resumeUpload.single('resume'), async (req: any, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No PDF file provided' });
     }
 
-  const hasCloudinary = isValidCloudinaryConfig();
+    console.log('Resume upload request received:', {
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
 
-    if (hasCloudinary) {
-      // Upload to Cloudinary
-      const stream = await cloudinary.uploader.upload_stream(
-        {
-          resource_type: 'auto',
-          folder: 'portfolio/resumes',
-          public_id: `resume_${Date.now()}`,
-          format: 'pdf'
-        },
-        (error: any, result: any) => {
-          if (error) {
-            // Fall back to local storage on auth or key errors (avoid noisy logs)
-            const authErrors = ['Unknown API key', 'Invalid Signature', 'Invalid credentials'];
-            const msg = (error?.message || '').toString();
-            const shouldFallback = authErrors.some(e => msg.includes(e)) || error?.http_code === 401;
-      if (shouldFallback) {
-              try {
-                const uploadsDir = path.join(__dirname, '../../uploads/resumes');
-                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-                const fileName = `resume_${Date.now()}.pdf`;
-                const filePath = path.join(uploadsDir, fileName);
-                fs.writeFileSync(filePath, req.file.buffer);
-        const publicUrl = `${getBaseUrl(req as Request)}/uploads/resumes/${fileName}`;
-                // Log a single concise warning when falling back
-                if (process.env.NODE_ENV !== 'production') {
-                  console.warn('Cloudinary auth failed; using local resume upload fallback.');
-                }
-                return res.json({ url: publicUrl, originalName: req.file?.originalname });
-              } catch (fallbackErr) {
-                console.error('Local fallback upload failed:', fallbackErr);
-                return res.status(500).json({ error: 'Failed to upload resume' });
-              }
-            }
-            // Non-auth errors: log once
-            console.error('Cloudinary upload error:', error);
-            return res.status(500).json({ error: 'Failed to upload resume' });
-          }
-          
-          res.json({
-            url: result?.secure_url,
-            publicId: result?.public_id,
-            originalName: req.file?.originalname
-          });
+    // Initialize Supabase client for uploads
+    const { createClient } = require('@supabase/supabase-js');
+    const uploadSupabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
         }
-      );
-
-      stream.end(req.file.buffer);
-    } else {
-      // Fallback: save to local filesystem and serve via /uploads
-      const uploadsDir = path.join(__dirname, '../../uploads/resumes');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
       }
-      const fileName = `resume_${Date.now()}.pdf`;
-      const filePath = path.join(uploadsDir, fileName);
-      fs.writeFileSync(filePath, req.file.buffer);
-  const publicUrl = `${getBaseUrl(req as Request)}/uploads/resumes/${fileName}`;
-      res.json({ url: publicUrl, originalName: req.file?.originalname });
+    );
+
+    // Delete any existing resume files first (keep only latest)
+    try {
+      const { data: existingFiles } = await uploadSupabase.storage
+        .from('Portfolio-storage')
+        .list('resumes', { limit: 100 });
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map((file: any) => `resumes/${file.name}`);
+        await uploadSupabase.storage
+          .from('Portfolio-storage')
+          .remove(filesToDelete);
+        console.log('Removed existing resume files');
+      }
+    } catch (cleanupError) {
+      console.warn('Could not clean up existing resumes:', cleanupError);
+      // Continue with upload even if cleanup fails
     }
+
+    // Generate unique filename for resume
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 15);
+    const fileName = `resumes/resume_${timestamp}_${randomId}.pdf`;
+    
+    console.log('Generated resume filename:', fileName);
+
+    // Upload to Supabase Storage
+    const { data, error } = await uploadSupabase.storage
+      .from('Portfolio-storage')
+      .upload(fileName, req.file.buffer, {
+        contentType: 'application/pdf',
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Supabase upload error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to upload resume',
+        details: error.message 
+      });
+    }
+
+    console.log('Resume uploaded successfully:', data.path);
+
+    // Get public URL
+    const { data: publicUrlData } = uploadSupabase.storage
+      .from('Portfolio-storage')
+      .getPublicUrl(fileName);
+
+    // Update personal info with new resume URL
+    try {
+      // First get the existing personal info to get the ID
+      const { data: existingInfo } = await supabase
+        .from('personal_info')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (existingInfo) {
+        const { data: personalInfo, error: updateError } = await supabase
+          .from('personal_info')
+          .update({ resume_url: publicUrlData.publicUrl })
+          .eq('id', existingInfo.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.warn('Could not update personal info with resume URL:', updateError);
+          // Continue and return URL even if DB update fails
+        } else {
+          console.log('Updated personal info with new resume URL');
+        }
+      } else {
+        console.warn('No personal info record found to update');
+      }
+    } catch (dbError) {
+      console.warn('Error updating personal info:', dbError);
+    }
+
+    const response = {
+      success: true,
+      url: publicUrlData.publicUrl,
+      path: data.path,
+      fileName: fileName,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mimeType: req.file.mimetype
+    };
+
+    console.log('Resume upload response:', response);
+    res.json(response);
 
   } catch (error) {
     console.error('Error uploading resume:', error);
-    res.status(500).json({ error: 'Failed to upload resume' });
+    res.status(500).json({ 
+      error: 'Failed to upload resume',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

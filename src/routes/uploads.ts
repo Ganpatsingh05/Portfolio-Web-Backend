@@ -1,27 +1,41 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { v2 as cloudinary } from 'cloudinary';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables from the correct location
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const router = Router();
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Initialize Supabase client with service role key for admin operations
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use service role key for uploads
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
-// Configure multer for file uploads
-const upload = multer({
+// Bucket name constant
+const BUCKET_NAME = 'Portfolio-storage';
+
+// Configure multer for image uploads
+const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
   fileFilter: (req: Request, file: any, cb: any) => {
-    if (file.mimetype.startsWith('image/')) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed!'));
+      cb(new Error('Only image files (JPEG, PNG, GIF, WebP) are allowed!'));
     }
   },
 });
@@ -41,99 +55,346 @@ const resumeUpload = multer({
   },
 });
 
+// Helper function to get file extension
+const getFileExtension = (filename: string): string => {
+  return filename.split('.').pop()?.toLowerCase() || '';
+};
+
+// Helper function to sanitize filename
+const sanitizeFilename = (filename: string): string => {
+  return filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+};
+
 // Upload image
-router.post('/image', upload.single('image'), async (req: any, res: Response) => {
+router.post('/image', imageUpload.single('image'), async (req: any, res: Response) => {
   try {
+    console.log('Image upload request received');
+    
     if (!req.file) {
+      console.log('No image file provided in request');
       return res.status(400).json({ error: 'No image file provided' });
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload_stream(
-      {
-        resource_type: 'image',
-        folder: 'portfolio',
-        transformation: [
-          { width: 1200, height: 800, crop: 'limit' },
-          { quality: 'auto' },
-          { format: 'auto' }
-        ]
-      },
-      (error: any, result: any) => {
-        if (error) {
-          console.error('Cloudinary upload error:', error);
-          return res.status(500).json({ error: 'Failed to upload image' });
-        }
-        
-        res.json({
-          url: result?.secure_url,
-          publicId: result?.public_id,
-          width: result?.width,
-          height: result?.height
-        });
-      }
-    );
+    console.log('Image file details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
 
-    result.end(req.file.buffer);
+    // Generate unique filename with proper extension
+    const fileExtension = getFileExtension(req.file.originalname);
+    const sanitizedName = sanitizeFilename(req.file.originalname.split('.')[0]);
+    const randomId = Math.random().toString(36).substring(2, 15);
+    const fileName = `images/${sanitizedName}_${randomId}.${fileExtension}`;
+
+    console.log('Generated filename:', fileName);
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Supabase upload error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to upload image',
+        details: error.message 
+      });
+    }
+
+    console.log('Image uploaded successfully:', data.path);
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    const response = {
+      success: true,
+      url: publicUrlData.publicUrl,
+      path: data.path,
+      fileName: fileName,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mimeType: req.file.mimetype
+    };
+
+    console.log('Image upload response:', response);
+    res.json(response);
 
   } catch (error) {
     console.error('Error uploading image:', error);
-    res.status(500).json({ error: 'Failed to upload image' });
+    res.status(500).json({ 
+      error: 'Failed to upload image',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 
 // Upload resume (PDF)
 router.post('/resume', resumeUpload.single('resume'), async (req: any, res: Response) => {
   try {
+    console.log('Resume upload request received');
+    
     if (!req.file) {
+      console.log('No PDF file provided in request');
       return res.status(400).json({ error: 'No PDF file provided' });
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload_stream(
-      {
-        resource_type: 'auto',
-        folder: 'portfolio/resumes',
-        public_id: `resume_${Date.now()}`,
-        format: 'pdf'
-      },
-      (error: any, result: any) => {
-        if (error) {
-          console.error('Cloudinary upload error:', error);
-          return res.status(500).json({ error: 'Failed to upload resume' });
-        }
-        
-        res.json({
-          url: result?.secure_url,
-          publicId: result?.public_id,
-          originalName: req.file?.originalname
-        });
-      }
-    );
+    console.log('Resume file details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
 
-    result.end(req.file.buffer);
+    // Delete any existing resume files first (optional - keeps only latest)
+    try {
+      const { data: existingFiles } = await supabase.storage
+        .from(BUCKET_NAME)
+        .list('resumes', { limit: 100 });
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(file => `resumes/${file.name}`);
+        await supabase.storage
+          .from(BUCKET_NAME)
+          .remove(filesToDelete);
+        console.log('Removed existing resume files');
+      }
+    } catch (cleanupError) {
+      console.warn('Could not clean up existing resumes:', cleanupError);
+      // Continue with upload even if cleanup fails
+    }
+
+    // Generate unique filename for resume
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 15);
+    const fileName = `resumes/resume_${timestamp}_${randomId}.pdf`;
+    
+    console.log('Generated resume filename:', fileName);
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, req.file.buffer, {
+        contentType: 'application/pdf',
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Supabase upload error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to upload resume',
+        details: error.message 
+      });
+    }
+
+    console.log('Resume uploaded successfully:', data.path);
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    const response = {
+      success: true,
+      url: publicUrlData.publicUrl,
+      path: data.path,
+      fileName: fileName,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mimeType: req.file.mimetype
+    };
+
+    console.log('Resume upload response:', response);
+    res.json(response);
 
   } catch (error) {
     console.error('Error uploading resume:', error);
-    res.status(500).json({ error: 'Failed to upload resume' });
+    res.status(500).json({ 
+      error: 'Failed to upload resume',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 
-// Delete image
-router.delete('/image/:publicId', async (req: Request, res: Response) => {
+// Delete file
+router.delete('/file/:fileName(*)', async (req: Request, res: Response) => {
   try {
-    const { publicId } = req.params;
+    const fileName = decodeURIComponent(req.params.fileName);
     
-    const result = await cloudinary.uploader.destroy(publicId);
+    console.log('Delete file request for:', fileName);
     
-    if (result.result === 'ok') {
-      res.json({ message: 'Image deleted successfully' });
-    } else {
-      res.status(404).json({ error: 'Image not found' });
+    // Delete from Supabase Storage
+    const { error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .remove([fileName]);
+
+    if (error) {
+      console.error('Supabase delete error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to delete file',
+        details: error.message 
+      });
     }
+
+    console.log('File deleted successfully:', fileName);
+    res.json({ 
+      success: true,
+      message: 'File deleted successfully',
+      fileName: fileName 
+    });
+
   } catch (error) {
-    console.error('Error deleting image:', error);
-    res.status(500).json({ error: 'Failed to delete image' });
+    console.error('Error deleting file:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete file',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get file info
+router.get('/file/:fileName(*)', async (req: Request, res: Response) => {
+  try {
+    const fileName = decodeURIComponent(req.params.fileName);
+    
+    console.log('Get file info request for:', fileName);
+    
+    // Extract folder and filename
+    const lastSlashIndex = fileName.lastIndexOf('/');
+    const folder = lastSlashIndex > 0 ? fileName.substring(0, lastSlashIndex) : '';
+    const fileNameOnly = fileName.substring(lastSlashIndex + 1);
+    
+    // Check if file exists
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .list(folder, {
+        search: fileNameOnly
+      });
+
+    if (error) {
+      console.error('Supabase file check error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to check file',
+        details: error.message 
+      });
+    }
+
+    if (!data || data.length === 0) {
+      console.log('File not found:', fileName);
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    const response = {
+      success: true,
+      url: publicUrlData.publicUrl,
+      fileName: fileName,
+      metadata: data[0]
+    };
+
+    console.log('File info response:', response);
+    res.json(response);
+
+  } catch (error) {
+    console.error('Error getting file info:', error);
+    res.status(500).json({ 
+      error: 'Failed to get file info',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// List files in a folder
+router.get('/files/:folder?', async (req: Request, res: Response) => {
+  try {
+    const { folder } = req.params;
+    const folderPath = folder || '';
+
+    console.log('List files request for folder:', folderPath);
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .list(folderPath, {
+        limit: 100,
+        offset: 0,
+        sortBy: { column: 'created_at', order: 'desc' }
+      });
+
+    if (error) {
+      console.error('Supabase list error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to list files',
+        details: error.message 
+      });
+    }
+
+    // Add public URLs to each file
+    const filesWithUrls = data?.map(file => {
+      const filePath = folderPath ? `${folderPath}/${file.name}` : file.name;
+      const { data: publicUrlData } = supabase.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(filePath);
+
+      return {
+        ...file,
+        path: filePath,
+        publicUrl: publicUrlData.publicUrl
+      };
+    }) || [];
+
+    console.log(`Found ${filesWithUrls.length} files in folder:`, folderPath);
+    res.json({ 
+      success: true,
+      files: filesWithUrls,
+      count: filesWithUrls.length 
+    });
+
+  } catch (error) {
+    console.error('Error listing files:', error);
+    res.status(500).json({ 
+      error: 'Failed to list files',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Health check endpoint
+router.get('/health', async (req: Request, res: Response) => {
+  try {
+    // Test Supabase storage connection
+    const { data, error } = await supabase.storage
+      .from('Portfolio-storage')
+      .list('', { limit: 1 });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      status: 'healthy',
+      storage: 'connected',
+      bucketName: 'Portfolio-storage',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Upload service health check failed:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      error: 'Storage connection failed',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 

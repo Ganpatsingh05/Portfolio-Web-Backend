@@ -1,17 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+// Load .env from the project root
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-// const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseUrl  = "https://yuvejygfodghfqaydndy.supabase.co";
-// const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dmVqeWdmb2RnaGZxYXlkbmR5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjcwMTU4NSwiZXhwIjoyMDcyMjc3NTg1fQ.ZK7iJ-uWBuUFR_Rgsaf71ysrKgkQ8Ucq0FtnpNvOHyU";
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-console.log("Urls : ",supabaseUrl);
-console.log("Urls 2: ",supabaseServiceKey);
+console.log('Supabase URL:', supabaseUrl ? 'Found' : 'Missing');
+console.log('Service Key:', supabaseServiceKey ? 'Found' : 'Missing');
 
 if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('SUPABASE_URL:', supabaseUrl);
+  console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey);
   throw new Error('Missing Supabase environment variables');
 }
 

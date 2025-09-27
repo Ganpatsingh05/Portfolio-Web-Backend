@@ -14,8 +14,8 @@ import adminRouter from './routes/admin';
 import uploadsRouter from './routes/uploads';
 import publicRouter from './routes/public';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from project root
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 // Trust only the first proxy hop (Render/NGINX) for correct IP/proto without being permissive
