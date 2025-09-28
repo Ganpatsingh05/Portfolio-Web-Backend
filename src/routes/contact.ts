@@ -1,20 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import nodemailer from 'nodemailer';
 import supabase from '../lib/supabase';
 
 const router = Router();
-
-// Configure nodemailer
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
 
 // Submit contact form
 router.post('/', [
@@ -29,7 +17,7 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-  const { name, email, subject, message, phone } = req.body;
+    const { name, email, subject, message, phone } = req.body;
 
     // Save to database
     const { data: contactMessage, error: dbError } = await supabase
@@ -48,29 +36,6 @@ router.post('/', [
     if (dbError) {
       console.error('Database error:', dbError);
       return res.status(500).json({ error: 'Failed to save message' });
-    }
-
-    // Send email notification
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to: process.env.EMAIL_TO,
-        subject: `New Contact Form Message from ${name}: ${subject}`,
-        html: `
-          <h2>New Contact Form Submission</h2>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Subject:</strong> ${subject}</p>
-          <p><strong>Phone:</strong> ${phone || 'Not provided'}</p>
-          <p><strong>Message:</strong></p>
-          <p>${message}</p>
-          <hr>
-          <p><em>Sent from your portfolio website</em></p>
-        `,
-      });
-    } catch (emailError) {
-      console.error('Email error:', emailError);
-      // Don't fail the request if email fails
     }
 
     res.status(201).json({ 

@@ -352,7 +352,7 @@ router.put('/messages/:id/read', authenticateAdmin, async (req: Request, res: Re
 
     const { data: message, error } = await supabase
       .from('contact_messages')
-      .update({ is_read: true, updated_at: new Date().toISOString() })
+      .update({ status: 'read', updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -363,6 +363,35 @@ router.put('/messages/:id/read', authenticateAdmin, async (req: Request, res: Re
   } catch (error) {
     console.error('Mark message read error:', error);
     res.status(500).json({ error: 'Failed to mark message as read' });
+  }
+});
+
+// Update message status (flexible endpoint)
+router.patch('/messages/:id/status', authenticateAdmin, [
+  body('status').isIn(['unread', 'read', 'replied']).withMessage('Invalid status. Must be unread, read, or replied'),
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const { data: message, error } = await supabase
+      .from('contact_messages')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json(message);
+  } catch (error) {
+    console.error('Update message status error:', error);
+    res.status(500).json({ error: 'Failed to update message status' });
   }
 });
 
@@ -614,9 +643,20 @@ router.get('/personal-info', authenticateAdmin, async (req: Request, res: Respon
 
 // Update personal info
 router.put('/personal-info', authenticateAdmin, [
-  body('name').optional().notEmpty(),
-  body('title').optional().notEmpty(),
-  body('email').optional().isEmail(),
+  body('name').optional().notEmpty().withMessage('Name cannot be empty'),
+  body('title').optional().notEmpty().withMessage('Title cannot be empty'),
+  body('email').optional().isEmail().withMessage('Must be a valid email'),
+  body('phone').optional().isString().withMessage('Phone must be a string'),
+  body('location').optional().notEmpty().withMessage('Location cannot be empty'),
+  body('website_url').optional().isURL().withMessage('Website URL must be valid'),
+  body('github_url').optional().isURL().withMessage('GitHub URL must be valid'),
+  body('linkedin_url').optional().isURL().withMessage('LinkedIn URL must be valid'),
+  body('leetcode_url').optional().isURL().withMessage('LeetCode URL must be valid'),
+  body('twitter_url').optional().isURL().withMessage('Twitter URL must be valid'),
+  body('instagram_url').optional().isURL().withMessage('Instagram URL must be valid'),
+  body('bio').optional().isString().withMessage('Bio must be a string'),
+  body('journey').optional().isString().withMessage('Journey must be a string'),
+  body('years_of_experience').optional().isInt({ min: 0 }).withMessage('Years of experience must be a positive number'),
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
