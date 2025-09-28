@@ -8,13 +8,8 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-console.log('Supabase URL:', supabaseUrl ? 'Found' : 'Missing');
-console.log('Service Key:', supabaseServiceKey ? 'Found' : 'Missing');
-
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('SUPABASE_URL:', supabaseUrl);
-  console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey);
-  throw new Error('Missing Supabase environment variables');
+  throw new Error('Missing required Supabase environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseServiceKey, {

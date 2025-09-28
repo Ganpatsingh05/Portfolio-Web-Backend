@@ -158,6 +158,8 @@ app.get('/api/_endpoints', (req: Request, res: Response) => {
     { method: 'GET', path: '/api/projects', public: true },
     { method: 'GET', path: '/api/skills', public: true },
     { method: 'GET', path: '/api/experiences', public: true },
+    { method: 'GET', path: '/api/hero', public: true },
+    { method: 'GET', path: '/api/settings', public: true },
     { method: 'POST', path: '/api/analytics', public: true },
     // Contact
     { method: 'POST', path: '/api/contact', public: true },
@@ -187,6 +189,8 @@ app.get('/api/_endpoints', (req: Request, res: Response) => {
     { method: 'PUT', path: '/api/admin/messages/:id/read', auth: true },
     { method: 'GET', path: '/api/admin/personal-info', auth: true },
     { method: 'PUT', path: '/api/admin/personal-info', auth: true },
+    { method: 'GET', path: '/api/admin/hero', auth: true },
+    { method: 'PUT', path: '/api/admin/hero', auth: true },
     { method: 'GET', path: '/api/admin/settings', auth: true },
     { method: 'PUT', path: '/api/admin/settings', auth: true },
     { method: 'POST', path: '/api/admin/upload/resume', auth: true },

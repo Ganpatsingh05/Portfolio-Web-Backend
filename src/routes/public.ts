@@ -67,6 +67,46 @@ router.get('/experiences', async (req: Request, res: Response) => {
   }
 });
 
+// Public: hero section
+router.get('/hero', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('hero_section')
+      .select('*')
+      .limit(1)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return ok(res, data || {
+      name: '',
+      typing_texts: [],
+      quote: null,
+      social_links: {}
+    });
+  } catch (err) {
+    console.error('Public hero section error:', err);
+    res.status(500).json({ error: 'Failed to fetch hero section' });
+  }
+});
+
+// Public: site settings (limited fields for frontend)
+router.get('/settings', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('site_settings')
+      .select('maintenance_mode, featured_sections')
+      .limit(1)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return ok(res, data || {
+      maintenance_mode: false,
+      featured_sections: ['projects', 'skills', 'experiences']
+    });
+  } catch (err) {
+    console.error('Public settings error:', err);
+    res.status(500).json({ error: 'Failed to fetch site settings' });
+  }
+});
+
 // Public: analytics capture (generic)
 router.post('/analytics', async (req: Request, res: Response) => {
   try {

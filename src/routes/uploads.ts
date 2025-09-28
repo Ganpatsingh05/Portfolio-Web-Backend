@@ -68,18 +68,10 @@ const sanitizeFilename = (filename: string): string => {
 // Upload image
 router.post('/image', imageUpload.single('image'), async (req: any, res: Response) => {
   try {
-    console.log('Image upload request received');
     
     if (!req.file) {
-      console.log('No image file provided in request');
       return res.status(400).json({ error: 'No image file provided' });
     }
-
-    console.log('Image file details:', {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size
-    });
 
     // Generate unique filename with proper extension
     const fileExtension = getFileExtension(req.file.originalname);
@@ -87,7 +79,6 @@ router.post('/image', imageUpload.single('image'), async (req: any, res: Respons
     const randomId = Math.random().toString(36).substring(2, 15);
     const fileName = `images/${sanitizedName}_${randomId}.${fileExtension}`;
 
-    console.log('Generated filename:', fileName);
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
@@ -106,7 +97,6 @@ router.post('/image', imageUpload.single('image'), async (req: any, res: Respons
       });
     }
 
-    console.log('Image uploaded successfully:', data.path);
 
     // Get public URL
     const { data: publicUrlData } = supabase.storage
@@ -123,7 +113,6 @@ router.post('/image', imageUpload.single('image'), async (req: any, res: Respons
       mimeType: req.file.mimetype
     };
 
-    console.log('Image upload response:', response);
     res.json(response);
 
   } catch (error) {
@@ -138,18 +127,10 @@ router.post('/image', imageUpload.single('image'), async (req: any, res: Respons
 // Upload resume (PDF)
 router.post('/resume', resumeUpload.single('resume'), async (req: any, res: Response) => {
   try {
-    console.log('Resume upload request received');
     
     if (!req.file) {
-      console.log('No PDF file provided in request');
       return res.status(400).json({ error: 'No PDF file provided' });
     }
-
-    console.log('Resume file details:', {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size
-    });
 
     // Delete any existing resume files first (optional - keeps only latest)
     try {
@@ -162,7 +143,6 @@ router.post('/resume', resumeUpload.single('resume'), async (req: any, res: Resp
         await supabase.storage
           .from(BUCKET_NAME)
           .remove(filesToDelete);
-        console.log('Removed existing resume files');
       }
     } catch (cleanupError) {
       console.warn('Could not clean up existing resumes:', cleanupError);
@@ -174,7 +154,6 @@ router.post('/resume', resumeUpload.single('resume'), async (req: any, res: Resp
     const randomId = Math.random().toString(36).substring(2, 15);
     const fileName = `resumes/resume_${timestamp}_${randomId}.pdf`;
     
-    console.log('Generated resume filename:', fileName);
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
@@ -193,7 +172,6 @@ router.post('/resume', resumeUpload.single('resume'), async (req: any, res: Resp
       });
     }
 
-    console.log('Resume uploaded successfully:', data.path);
 
     // Get public URL
     const { data: publicUrlData } = supabase.storage
@@ -210,7 +188,6 @@ router.post('/resume', resumeUpload.single('resume'), async (req: any, res: Resp
       mimeType: req.file.mimetype
     };
 
-    console.log('Resume upload response:', response);
     res.json(response);
 
   } catch (error) {
@@ -227,7 +204,6 @@ router.delete('/file/:fileName(*)', async (req: Request, res: Response) => {
   try {
     const fileName = decodeURIComponent(req.params.fileName);
     
-    console.log('Delete file request for:', fileName);
     
     // Delete from Supabase Storage
     const { error } = await supabase.storage
@@ -242,7 +218,6 @@ router.delete('/file/:fileName(*)', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('File deleted successfully:', fileName);
     res.json({ 
       success: true,
       message: 'File deleted successfully',
@@ -263,7 +238,6 @@ router.get('/file/:fileName(*)', async (req: Request, res: Response) => {
   try {
     const fileName = decodeURIComponent(req.params.fileName);
     
-    console.log('Get file info request for:', fileName);
     
     // Extract folder and filename
     const lastSlashIndex = fileName.lastIndexOf('/');
@@ -286,7 +260,6 @@ router.get('/file/:fileName(*)', async (req: Request, res: Response) => {
     }
 
     if (!data || data.length === 0) {
-      console.log('File not found:', fileName);
       return res.status(404).json({ error: 'File not found' });
     }
 
@@ -302,7 +275,6 @@ router.get('/file/:fileName(*)', async (req: Request, res: Response) => {
       metadata: data[0]
     };
 
-    console.log('File info response:', response);
     res.json(response);
 
   } catch (error) {
@@ -320,7 +292,6 @@ router.get('/files/:folder?', async (req: Request, res: Response) => {
     const { folder } = req.params;
     const folderPath = folder || '';
 
-    console.log('List files request for folder:', folderPath);
 
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
@@ -352,7 +323,6 @@ router.get('/files/:folder?', async (req: Request, res: Response) => {
       };
     }) || [];
 
-    console.log(`Found ${filesWithUrls.length} files in folder:`, folderPath);
     res.json({ 
       success: true,
       files: filesWithUrls,
