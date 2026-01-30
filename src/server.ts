@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -7,12 +7,17 @@ import path from 'path';
 import chalk from 'chalk';
 
 // Import routes
-import projectsRouter from './routes/projects';
 import contactRouter from './routes/contact';
 import analyticsRouter from './routes/analytics';
-import adminRouter from './routes/admin';
 import uploadsRouter from './routes/uploads';
 import publicRouter from './routes/public';
+
+// Import modular admin routes
+import authRouter from './routes/auth';
+import adminRouter from './routes/admin/index';
+
+// Import middleware
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 // Load environment variables from project root
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -139,11 +144,16 @@ app.get('/api/health', (req: Request, res: Response) => {
 });
 
 // API routes
-app.use('/api/projects', projectsRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/analytics', analyticsRouter);
-app.use('/api/admin', adminRouter);
 app.use('/api/uploads', uploadsRouter);
+
+// Auth routes (login)
+app.use('/api/admin', authRouter);
+
+// Admin protected routes (modular)
+app.use('/api/admin', adminRouter);
+
 // Public, unauthenticated routes expected by the frontend hooks
 app.use('/api', publicRouter);
 
@@ -226,28 +236,10 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // 404 handler
-app.use('*', (req: Request, res: Response) => {
-  res.status(404).json({ error: 'Route not found' });
-});
+app.use(notFoundHandler);
 
 // Error handling middleware
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
-  
-  if (err.status === 404) {
-    return res.status(404).json({ error: 'Resource not found' });
-  }
-  
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({ error: err.message });
-  }
-  
-  res.status(500).json({ 
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : err.message 
-  });
-});
+app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {

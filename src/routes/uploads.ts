@@ -1,25 +1,8 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-import path from 'path';
-
-// Load environment variables from the correct location
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+import supabase from '../lib/supabase';
 
 const router = Router();
-
-// Initialize Supabase client with service role key for admin operations
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use service role key for uploads
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
 
 // Bucket name constant
 const BUCKET_NAME = 'Portfolio-storage';
