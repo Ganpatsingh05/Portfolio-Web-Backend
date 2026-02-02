@@ -15,6 +15,44 @@ interface DashboardStats {
   skillsByCategory: Record<string, number>;
 }
 
+// GET /dashboard - Main dashboard endpoint (frontend expects this)
+router.get('/', authenticateAdmin, async (req: Request, res: Response) => {
+  try {
+    // Parallel fetch all data
+    const [
+      projectsResult,
+      skillsResult,
+      experiencesResult,
+      messagesResult,
+      recentMessagesResult,
+      analyticsResult
+    ] = await Promise.all([
+      supabase.from('projects').select('id, category', { count: 'exact' }),
+      supabase.from('skills').select('id, category', { count: 'exact' }),
+      supabase.from('experiences').select('id', { count: 'exact' }),
+      supabase.from('contact_messages').select('id, status', { count: 'exact' }),
+      supabase.from('contact_messages').select('*').order('created_at', { ascending: false }).limit(5),
+      supabase.from('analytics').select('id', { count: 'exact' }).eq('event_type', 'page_view')
+    ]);
+
+    const stats = {
+      projects: projectsResult.count || 0,
+      skills: skillsResult.count || 0,
+      messages: messagesResult.count || 0,
+      pageViews: analyticsResult.count || 0
+    };
+
+    res.json({
+      stats,
+      recentMessages: recentMessagesResult.data || [],
+      recentViews: []
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard data' });
+  }
+});
+
 // GET /dashboard/stats - Get dashboard statistics
 router.get('/stats', authenticateAdmin, async (req: Request, res: Response) => {
   try {

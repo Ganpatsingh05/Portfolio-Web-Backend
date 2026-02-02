@@ -5,7 +5,7 @@ import supabase from '../lib/supabase';
 const router = Router();
 
 // Bucket name constant
-const BUCKET_NAME = 'Portfolio-storage';
+const BUCKET_NAME = 'portfolio-storage';
 
 // Configure multer for image uploads
 const imageUpload = multer({

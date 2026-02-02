@@ -241,13 +241,47 @@ app.use(notFoundHandler);
 // Error handling middleware
 app.use(errorHandler);
 
+// Handle uncaught exceptions - prevents silent crashes
+process.on('uncaughtException', (err) => {
+  console.error(chalk.red('💥 UNCAUGHT EXCEPTION! Shutting down...'));
+  console.error(chalk.red(`Error: ${err.message}`));
+  console.error(err.stack);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections - common cause of "silent" failures
+process.on('unhandledRejection', (reason: any) => {
+  console.error(chalk.red('💥 UNHANDLED REJECTION! Shutting down...'));
+  console.error(chalk.red(`Reason: ${reason?.message || reason}`));
+  if (reason?.stack) console.error(reason.stack);
+  process.exit(1);
+});
+
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   if (process.env.NODE_ENV !== 'production') {
     console.log(`🔗 API URL: http://localhost:${PORT}`);
   }
 });
+
+// Graceful shutdown handling - ensures clean restart
+const gracefulShutdown = (signal: string) => {
+  console.log(chalk.yellow(`\n⚠️ ${signal} received. Shutting down gracefully...`));
+  server.close(() => {
+    console.log(chalk.green('✅ HTTP server closed.'));
+    process.exit(0);
+  });
+  
+  // Force close after 10s if graceful shutdown fails
+  setTimeout(() => {
+    console.error(chalk.red('⚠️ Forced shutdown after timeout'));
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 export default app;

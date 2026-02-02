@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import supabase from '../lib/supabase';
+import { sendContactNotification } from '../lib/email';
 
 const router = Router();
 
@@ -37,6 +38,10 @@ router.post('/', [
       console.error('Database error:', dbError);
       return res.status(500).json({ error: 'Failed to save message' });
     }
+
+    // Send email notification (don't fail the request if email fails)
+    sendContactNotification({ name, email, subject, message, phone })
+      .catch(err => console.error('Email notification error:', err));
 
     res.status(201).json({ 
       message: 'Message sent successfully',

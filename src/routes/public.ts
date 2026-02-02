@@ -70,18 +70,29 @@ router.get('/experiences', async (req: Request, res: Response) => {
 // Public: hero section
 router.get('/hero', async (req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase
+    const { data: hero, error } = await supabase
       .from('hero_section')
       .select('*')
       .limit(1)
-      .single();
-    if (error && error.code !== 'PGRST116') throw error;
-    return ok(res, data || {
+      .maybeSingle();
+    if (error) throw error;
+    
+    // Map DB fields to frontend expected fields
+    const result = hero ? {
+      greeting: hero.greeting || "Hello, I'm",
+      name: hero.name || '',
+      typing_texts: hero.titles || [],
+      quote: hero.description || '',
+      social_links: hero.social_links || {}
+    } : {
+      greeting: "Hello, I'm",
       name: '',
       typing_texts: [],
-      quote: null,
+      quote: '',
       social_links: {}
-    });
+    };
+    
+    return ok(res, result);
   } catch (err) {
     console.error('Public hero section error:', err);
     res.status(500).json({ error: 'Failed to fetch hero section' });
@@ -91,15 +102,31 @@ router.get('/hero', async (req: Request, res: Response) => {
 // Public: site settings (limited fields for frontend)
 router.get('/settings', async (req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase
-      .from('site_settings')
-      .select('maintenance_mode, featured_sections')
-      .limit(1)
-      .single();
-    if (error && error.code !== 'PGRST116') throw error;
-    return ok(res, data || {
-      maintenance_mode: false,
-      featured_sections: ['projects', 'skills', 'experiences']
+    const { data: settings, error } = await supabase
+      .from('settings')
+      .select('*');
+
+    if (error) throw error;
+
+    // Convert key-value array to object
+    const settingsObj = settings?.reduce((acc: Record<string, any>, setting: any) => {
+      acc[setting.key] = setting.value;
+      return acc;
+    }, {}) || {};
+
+    // Return only public-facing settings
+    return ok(res, {
+      maintenance_mode: settingsObj.maintenance_mode ?? false,
+      maintenance_message: settingsObj.maintenance_message ?? 'Site is under maintenance. Please check back soon.',
+      visible_sections: settingsObj.visible_sections ?? ['hero', 'about', 'skills', 'projects', 'experience', 'contact'],
+      show_footer: settingsObj.show_footer ?? true,
+      show_navigation: settingsObj.show_navigation ?? true,
+      enable_animations: settingsObj.enable_animations ?? true,
+      contact_form_enabled: settingsObj.contact_form_enabled ?? true,
+      show_social_links: settingsObj.show_social_links ?? true,
+      show_resume_button: settingsObj.show_resume_button ?? true,
+      default_theme: settingsObj.default_theme ?? 'system',
+      accent_color: settingsObj.accent_color ?? '#3B82F6',
     });
   } catch (err) {
     console.error('Public settings error:', err);

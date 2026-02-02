@@ -6,7 +6,7 @@
   "scripts": {
     "render-build": "npm install --include=dev && npm run build",
     "start": "node dist/server.js",
-    "dev": "ts-node-dev src/server.ts",
+    "dev": "ts-node-dev --respawn --transpile-only --clear --exit-child src/server.ts",
     "build": "tsc",
     "test": "jest",
     "migrate": "node scripts/migrate.js"
