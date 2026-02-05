@@ -5,13 +5,13 @@ This is the backend API for Ganpat Singh's portfolio website built with Node.js,
 ## Features
 
 - RESTful API endpoints
-- Contact form handling
+- Contact form handling with disposable email validation
 - Analytics tracking
-- Project management
+- Project management with custom ordering
 - Personal information management
 - File upload support
 - Email notifications
-- Admin authentication
+- **Supabase Authentication** for admin access
 - Rate limiting and security
 
 ## Tech Stack
@@ -20,6 +20,7 @@ This is the backend API for Ganpat Singh's portfolio website built with Node.js,
 - **Framework**: Express.js
 - **Language**: TypeScript
 - **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
 - **Email**: Nodemailer
 - **File Storage**: Cloudinary
 - **Security**: Helmet, CORS, Rate Limiting
@@ -41,7 +42,7 @@ This is the backend API for Ganpat Singh's portfolio website built with Node.js,
 
 ### Admin Endpoints (Require Authentication)
 
-- `POST /api/admin/login` - Admin login
+- `POST /api/admin/login` - Admin login (email/password)
 - `GET /api/admin/dashboard` - Dashboard stats
 - `POST /api/projects` - Create project
 - `PUT /api/projects/:id` - Update project
@@ -76,7 +77,7 @@ npm install
 
 2. Create environment file:
 ```bash
-cp .env.example .env
+cp .env.production.example .env
 ```
 
 3. Configure environment variables in `.env`:
@@ -97,28 +98,25 @@ SMTP_PORT=587
 SMTP_USER=your_email@gmail.com
 SMTP_PASS=your_app_password
 EMAIL_FROM=your_email@gmail.com
-EMAIL_TO=ganpatsingh@example.com
+EMAIL_TO=your_email@gmail.com
 
 # Cloudinary Configuration
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
-
-# Security
-JWT_SECRET=your_super_secret_jwt_key
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your_admin_password
 ```
 
-### Database Setup
+### Authentication Setup
 
-1. Create a new Supabase project
-2. Run the database schema:
-```bash
-npm run migrate
-```
+This app uses **Supabase Authentication**. To set up admin access:
 
-Or manually execute the SQL in `database/schema.sql` in your Supabase SQL editor.
+1. Go to your Supabase Dashboard → **Authentication** → **Users**
+2. Click **"Add user"**
+3. Enter your email and password
+4. Click **"Create user"**
+5. Use this email/password to login at `/admin/login`
+
+**No additional environment variables needed for authentication!**
 
 ### Development
 
@@ -146,44 +144,40 @@ npm start
 ```
 src/
 ├── lib/               # Configurations and utilities
+│   ├── email.ts      # Email configuration
 │   └── supabase.ts   # Supabase client configuration
+├── middleware/       # Express middleware
+│   └── errorHandler.ts # Error handling middleware
 ├── routes/           # API route handlers
-│   ├── admin.ts      # Admin authentication and dashboard
 │   ├── analytics.ts  # Analytics tracking
+│   ├── auth.ts       # Admin authentication (Supabase Auth)
 │   ├── contact.ts    # Contact form handling
-│   ├── personal-info.ts # Personal information management
-│   ├── projects.ts   # Project management
-│   └── uploads.ts    # File upload handling
+│   ├── public.ts     # Public endpoints
+│   ├── uploads.ts    # File upload handling
+│   └── admin/        # Admin-only routes
+│       ├── dashboard.ts
+│       ├── experiences.ts
+│       ├── hero.ts
+│       ├── messages.ts
+│       ├── personal.ts
+│       ├── projects.ts
+│       ├── settings.ts
+│       └── skills.ts
 └── server.ts         # Main server application
-
-database/
-└── schema.sql        # Database schema and sample data
 
 dist/                 # Compiled JavaScript (after build)
 ```
 
-## Database Schema
-
-The application uses 8 main tables:
-
-1. **personal_info** - Personal information and bio
-2. **projects** - Portfolio projects
-3. **skills** - Technical skills
-4. **experiences** - Work experiences
-5. **contact_messages** - Contact form submissions
-6. **analytics** - Website analytics data
-7. **blog_posts** - Blog articles (future feature)
-8. **testimonials** - Client testimonials (future feature)
-
 ## Security Features
 
+- **Supabase Authentication**: Secure email/password authentication with JWT tokens
 - **Rate Limiting**: 100 requests per 15 minutes per IP
 - **CORS**: Configured for frontend domain
 - **Helmet**: Security headers
 - **Input Validation**: Request validation with express-validator
-- **Admin Authentication**: Simple username/password authentication
+- **Disposable Email Blocking**: Contact form blocks disposable email domains
 - **File Upload Limits**: 5MB file size limit
-- **Environment Variables**: Sensitive data in environment variables
+- **Environment Variables**: All sensitive data in environment variables
 
 ## Email Configuration
 
@@ -210,84 +204,51 @@ Images are uploaded to Cloudinary with automatic optimization:
 
 ## Deployment
 
-### Railway
+### Render (Recommended)
 
-1. Connect your GitHub repository to Railway
-2. Configure environment variables in Railway dashboard
+1. Connect your GitHub repository to Render
+2. Configure environment variables in Render dashboard
 3. Deploy automatically on push to main branch
 
-### Heroku
+### Vercel/Heroku
 
-1. Create a new Heroku app
+1. Create a new app
 2. Connect your GitHub repository
-3. Configure environment variables in Heroku dashboard
+3. Configure environment variables
 4. Enable automatic deploys
-
-### VPS/Cloud Server
-
-1. Build the application: `npm run build`
-2. Upload files to your server
-3. Install dependencies: `npm ci --production`
-4. Configure environment variables
-5. Start with PM2: `pm2 start dist/server.js`
-
-## Monitoring and Logging
-
-The application includes:
-
-- **Health Check**: `/health` endpoint for monitoring
-- **Error Handling**: Centralized error handling middleware
-- **Request Logging**: Basic request logging
-- **Analytics**: Built-in analytics tracking
-
-## Environment Variables
-
-All required environment variables are documented in `.env.example`. Make sure to:
-
-1. Copy `.env.example` to `.env`
-2. Fill in all required values
-3. Keep `.env` out of version control
-4. Use different values for production
 
 ## Scripts
 
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Build TypeScript to JavaScript
 - `npm start` - Start production server
-- `npm run migrate` - Run database migrations
-- `npm test` - Run tests (when implemented)
+- `npm test` - Run tests
 
 ## API Authentication
 
-### Admin Authentication
+Admin endpoints require a Bearer token obtained from `/api/admin/login`:
 
-Send credentials in request headers:
 ```javascript
-headers: {
-  'username': 'admin',
-  'password': 'your_admin_password'
-}
+// Login
+const response = await fetch('/api/admin/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email: 'admin@example.com',
+    password: 'your_password'
+  })
+});
+
+const { token } = await response.json();
+
+// Use token for authenticated requests
+const projects = await fetch('/api/admin/projects', {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
 ```
-
-### Frontend Integration
-
-Configure your frontend to use the API:
-```javascript
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
-// Example API call
-const response = await fetch(`${API_URL}/api/projects`);
-const projects = await response.json();
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Commit your changes: `git commit -am 'Add new feature'`
-4. Push to the branch: `git push origin feature/new-feature`
-5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.

@@ -1,34 +1,39 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
-import jwt from 'jsonwebtoken';
+import { supabase } from '../lib/supabase';
 
 const router = Router();
 
-// JWT secret handling
-const JWT_SECRET = process.env.JWT_SECRET;
-if (process.env.NODE_ENV === 'production' && !JWT_SECRET) {
-  throw new Error('JWT_SECRET is required in production');
-}
-
-const getJwtSecret = () => JWT_SECRET || 'dev_fallback_insecure_jwt_secret';
-
 /**
  * Admin authentication middleware
- * Verifies JWT token and attaches admin info to request
+ * Verifies Supabase JWT token and attaches admin info to request
  */
-export const authenticateAdmin = (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
+export const authenticateAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
   
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
-    (req as any).adminUser = decoded;
+    // Verify token with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    // Attach user info to request
+    (req as any).adminUser = {
+      id: user.id,
+      email: user.email,
+      role: 'admin'
+    };
+    
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 };
 
@@ -36,7 +41,7 @@ export const authenticateAdmin = (req: Request, res: Response, next: NextFunctio
 router.get('/login', (req: Request, res: Response) => {
   res.status(405).json({
     error: 'Method not allowed',
-    message: 'Use POST /api/admin/login with JSON: {"username":"...","password":"..."}',
+    message: 'Use POST /api/admin/login with JSON: {"email":"...","password":"..."}',
   });
 });
 
@@ -46,9 +51,9 @@ router.options('/login', (req: Request, res: Response) => {
   res.status(204).end();
 });
 
-// POST /login - Admin authentication
+// POST /login - Admin authentication with Supabase
 router.post('/login', [
-  body('username').notEmpty().withMessage('Username is required'),
+  body('email').isEmail().withMessage('Valid email is required'),
   body('password').notEmpty().withMessage('Password is required'),
 ], async (req: Request, res: Response) => {
   try {
@@ -57,30 +62,26 @@ router.post('/login', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password } = req.body;
+    const { email, password } = req.body;
     
-    // Get admin credentials from environment
-    const adminUsername = process.env.ADMIN_USERNAME || (process.env.NODE_ENV !== 'production' ? 'admin' : '');
-    const adminPassword = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV !== 'production' ? 'GanpatPortfolio2024!' : '');
+    // Authenticate with Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    if (process.env.NODE_ENV === 'production' && (!adminUsername || !adminPassword)) {
-      console.error('Admin credentials not configured');
-      return res.status(500).json({ error: 'Admin credentials are not configured' });
-    }
-
-    if (username !== adminUsername || password !== adminPassword) {
+    if (error || !data.session) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign(
-      { username, role: 'admin' },
-      getJwtSecret(),
-      { expiresIn: '24h' }
-    );
-
+    // Return the Supabase session token
     res.json({
-      token,
-      user: { username, role: 'admin' },
+      token: data.session.access_token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        role: 'admin'
+      },
       message: 'Login successful'
     });
   } catch (error) {

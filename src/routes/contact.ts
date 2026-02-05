@@ -5,12 +5,35 @@ import { sendContactNotification } from '../lib/email';
 
 const router = Router();
 
+// List of disposable email domains
+const disposableEmailDomains = [
+  '10minutemail.com', 'tempmail.com', 'guerrillamail.com', 'mailinator.com',
+  'throwaway.email', 'temp-mail.org', 'fakeinbox.com', 'trashmail.com',
+  'getnada.com', 'maildrop.cc', 'yopmail.com', 'mohmal.com', 'sharklasers.com',
+  'bugmenot.com', 'dispostable.com', 'spamgourmet.com', 'mintemail.com'
+];
+
+// Custom email validation middleware
+const validateEmailDomain = (req: Request, res: Response, next: any) => {
+  const { email } = req.body;
+  if (email) {
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (domain && disposableEmailDomains.includes(domain)) {
+      return res.status(400).json({ 
+        error: 'Disposable or temporary email addresses are not allowed. Please use a permanent email address.' 
+      });
+    }
+  }
+  next();
+};
+
 // Submit contact form
 router.post('/', [
   body('name').notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Valid email is required'),
   body('subject').notEmpty().withMessage('Subject is required'),
   body('message').notEmpty().withMessage('Message is required'),
+  validateEmailDomain
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
