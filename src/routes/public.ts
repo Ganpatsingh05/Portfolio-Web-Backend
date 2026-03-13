@@ -25,13 +25,25 @@ router.get('/personal-info', async (req: Request, res: Response) => {
 // Public: projects
 router.get('/projects', async (req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase
+    // Try with visibility filter and timeline ordering first
+    let { data, error } = await supabase
       .from('projects')
       .select('*')
       .not('visible', 'eq', false)
       .order('timeline', { ascending: false })
       .order('created_at', { ascending: false });
-    if (error) throw error;
+
+    // Fallback if visible/timeline columns don't exist yet
+    if (error) {
+      console.warn('Projects query with visibility filter failed, using fallback:', error.message);
+      const fallback = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (fallback.error) throw fallback.error;
+      data = fallback.data;
+    }
+
     return ok(res, data || []);
   } catch (err) {
     console.error('Public projects error:', err);
