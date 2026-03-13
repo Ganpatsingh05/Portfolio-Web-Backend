@@ -34,8 +34,8 @@ router.post('/', authenticateAdmin, [
 
     const {
       title, description, image_url, category, technologies,
-      demo_url, github_url, featured, status, sort_order,
-      start_date, end_date
+      demo_url, github_url, featured, status,
+      start_date, end_date, timeline, visible
     } = req.body;
 
     const projectData = {
@@ -43,16 +43,17 @@ router.post('/', authenticateAdmin, [
       description,
       image_url,
       category,
-      technologies: Array.isArray(technologies) 
-        ? technologies 
+      technologies: Array.isArray(technologies)
+        ? technologies
         : (technologies ? technologies.split(',').map((t: string) => t.trim()) : []),
       demo_url,
       github_url,
       featured: featured || false,
       status: status || 'completed',
-      sort_order: sort_order || 0,
       start_date,
-      end_date
+      end_date,
+      timeline,
+      visible: visible !== false
     };
 
     const { data: project, error } = await supabase
@@ -75,8 +76,8 @@ router.put('/:id', authenticateAdmin, async (req: Request, res: Response) => {
     const { id } = req.params;
     const {
       title, description, image_url, category, technologies,
-      demo_url, github_url, featured, status, sort_order,
-      start_date, end_date
+      demo_url, github_url, featured, status,
+      start_date, end_date, timeline, visible
     } = req.body;
 
     const updateData = {
@@ -91,9 +92,10 @@ router.put('/:id', authenticateAdmin, async (req: Request, res: Response) => {
       github_url,
       featured,
       status,
-      sort_order,
       start_date,
       end_date,
+      timeline,
+      visible,
       updated_at: new Date().toISOString()
     };
 

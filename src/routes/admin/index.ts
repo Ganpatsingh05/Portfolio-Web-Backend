@@ -9,6 +9,7 @@ import personalRouter from './personal';
 import settingsRouter from './settings';
 import dashboardRouter from './dashboard';
 import heroRouter from './hero';
+import certificatesRouter from './certificates';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/personal-info', personalRouter);
 router.use('/settings', settingsRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/hero', heroRouter);
+router.use('/certificates', certificatesRouter);
 
 export default router;

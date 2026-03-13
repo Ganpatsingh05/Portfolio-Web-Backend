@@ -28,7 +28,8 @@ router.get('/projects', async (req: Request, res: Response) => {
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .order('sort_order', { ascending: true })
+      .not('visible', 'eq', false)
+      .order('timeline', { ascending: false })
       .order('created_at', { ascending: false });
     if (error) throw error;
     return ok(res, data || []);
@@ -65,6 +66,21 @@ router.get('/experiences', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Public experiences error:', err);
     res.status(500).json({ error: 'Failed to fetch experiences' });
+  }
+});
+
+// Public: certificates
+router.get('/certificates', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('certificates')
+      .select('*')
+      .order('issue_date', { ascending: false });
+    if (error) throw error;
+    return ok(res, data || []);
+  } catch (err) {
+    console.error('Public certificates error:', err);
+    res.status(500).json({ error: 'Failed to fetch certificates' });
   }
 });
 
