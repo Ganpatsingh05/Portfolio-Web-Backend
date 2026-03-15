@@ -6,6 +6,25 @@ const router = Router();
 // Standard success helper
 const ok = (res: Response, data: any) => res.json({ data });
 
+const legacyVisibleSections = ['hero', 'about', 'skills', 'projects', 'experience', 'contact'] as const;
+const defaultVisibleSections = ['hero', 'about', 'skills', 'projects', 'experience', 'certificates', 'contact'] as const;
+
+const normalizeVisibleSections = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [...defaultVisibleSections];
+
+  const sections = Array.from(new Set(value.filter((section): section is string => typeof section === 'string')));
+
+  const isLegacySet =
+    sections.length === legacyVisibleSections.length &&
+    legacyVisibleSections.every(section => sections.includes(section));
+
+  if (isLegacySet) {
+    return [...defaultVisibleSections];
+  }
+
+  return sections;
+};
+
 // Public: personal info (single row)
 router.get('/personal-info', async (req: Request, res: Response) => {
   try {
@@ -178,7 +197,7 @@ router.get('/settings', async (req: Request, res: Response) => {
     return ok(res, {
       maintenance_mode: settingsObj.maintenance_mode ?? false,
       maintenance_message: settingsObj.maintenance_message ?? 'Site is under maintenance. Please check back soon.',
-      visible_sections: settingsObj.visible_sections ?? ['hero', 'about', 'skills', 'projects', 'experience', 'contact'],
+      visible_sections: normalizeVisibleSections(settingsObj.visible_sections),
       show_footer: settingsObj.show_footer ?? true,
       show_navigation: settingsObj.show_navigation ?? true,
       enable_animations: settingsObj.enable_animations ?? true,
