@@ -25,26 +25,42 @@ router.get('/personal-info', async (req: Request, res: Response) => {
 // Public: projects
 router.get('/projects', async (req: Request, res: Response) => {
   try {
-    // Try with visibility filter and timeline ordering first
-    let { data, error } = await supabase
+    // Fetch all projects, then filter and sort in code for more reliable results
+    const { data: allProjects, error } = await supabase
       .from('projects')
-      .select('*')
-      .not('visible', 'eq', false)
-      .order('timeline', { ascending: false })
-      .order('created_at', { ascending: false });
+      .select('*');
 
-    // Fallback if visible/timeline columns don't exist yet
-    if (error) {
-      console.warn('Projects query with visibility filter failed, using fallback:', error.message);
-      const fallback = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (fallback.error) throw fallback.error;
-      data = fallback.data;
-    }
+    if (error) throw error;
 
-    return ok(res, data || []);
+    // Filter: only show visible projects (visible = true or visible = null/undefined)
+    // Hide projects where visible is explicitly false
+    const visibleProjects = (allProjects || []).filter((project: any) =>
+      project.visible !== false
+    );
+
+    // Sort: by end_date (most recent first), then created_at
+    // Projects with end_date come first, sorted by end_date descending
+    // Projects without end_date come after, sorted by created_at descending
+    const sortedProjects = visibleProjects.sort((a: any, b: any) => {
+      // If both have end_date, sort by end_date (most recent first)
+      if (a.end_date && b.end_date) {
+        return new Date(b.end_date).getTime() - new Date(a.end_date).getTime();
+      }
+      // If only a has end_date, a comes first
+      if (a.end_date && !b.end_date) {
+        return -1;
+      }
+      // If only b has end_date, b comes first
+      if (!a.end_date && b.end_date) {
+        return 1;
+      }
+      // If neither has end_date, sort by created_at (most recent first)
+      const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bDate - aDate;
+    });
+
+    return ok(res, sortedProjects);
   } catch (err) {
     console.error('Public projects error:', err);
     res.status(500).json({ error: 'Failed to fetch projects' });
@@ -84,12 +100,27 @@ router.get('/experiences', async (req: Request, res: Response) => {
 // Public: certificates
 router.get('/certificates', async (req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase
+    // Fetch all certificates
+    const { data: allCertificates, error } = await supabase
       .from('certificates')
-      .select('*')
-      .order('issue_date', { ascending: false });
+      .select('*');
+
     if (error) throw error;
-    return ok(res, data || []);
+
+    // Filter: only show visible certificates (visible = true or visible = null/undefined)
+    // Hide certificates where visible is explicitly false
+    const visibleCertificates = (allCertificates || []).filter((cert: any) =>
+      cert.visible !== false
+    );
+
+    // Sort: by issue_date descending (most recent first)
+    const sortedCertificates = visibleCertificates.sort((a: any, b: any) => {
+      const aDate = a.issue_date ? new Date(a.issue_date).getTime() : 0;
+      const bDate = b.issue_date ? new Date(b.issue_date).getTime() : 0;
+      return bDate - aDate;
+    });
+
+    return ok(res, sortedCertificates);
   } catch (err) {
     console.error('Public certificates error:', err);
     res.status(500).json({ error: 'Failed to fetch certificates' });
