@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import supabase from '../lib/supabase';
 import { sendContactNotification } from '../lib/email';
@@ -14,7 +14,7 @@ const disposableEmailDomains = [
 ];
 
 // Custom email validation middleware
-const validateEmailDomain = (req: Request, res: Response, next: any) => {
+const validateEmailDomain = (req: Request, res: Response, next: NextFunction) => {
   const { email } = req.body;
   if (email) {
     const domain = email.split('@')[1]?.toLowerCase();
@@ -62,13 +62,20 @@ router.post('/', [
       return res.status(500).json({ error: 'Failed to save message' });
     }
 
-    // Send email notification (don't fail the request if email fails)
-    sendContactNotification({ name, email, subject, message, phone })
-      .catch(err => console.error('Email notification error:', err));
+    // Send email notification (do not fail entire request if delivery fails)
+    let emailSent = false;
+    try {
+      emailSent = await sendContactNotification({ name, email, subject, message, phone });
+    } catch (err) {
+      console.error('Email notification error:', err);
+    }
 
     res.status(201).json({ 
-      message: 'Message sent successfully',
-      id: contactMessage.id 
+      message: emailSent
+        ? 'Message sent successfully'
+        : 'Message saved successfully, but email notification could not be delivered.',
+      id: contactMessage.id,
+      email_sent: emailSent,
     });
 
   } catch (error) {

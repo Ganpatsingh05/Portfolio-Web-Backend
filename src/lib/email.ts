@@ -1,24 +1,30 @@
 import nodemailer from 'nodemailer';
 
+const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST;
+const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587', 10);
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
+const fromEmail = process.env.EMAIL_FROM || smtpUser;
+const notificationEmail = process.env.NOTIFICATION_EMAIL || process.env.EMAIL_TO || smtpUser;
+
 // Create reusable transporter
 const createTransporter = () => {
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    console.warn('⚠️ Email configuration incomplete. Email notifications will be disabled.');
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    const missing: string[] = [];
+    if (!smtpHost) missing.push('SMTP_HOST/EMAIL_HOST');
+    if (!smtpUser) missing.push('SMTP_USER/EMAIL_USER');
+    if (!smtpPass) missing.push('SMTP_PASS/EMAIL_PASS');
+    console.warn(`⚠️ Email configuration incomplete (missing: ${missing.join(', ')}). Email notifications will be disabled.`);
     return null;
   }
 
   return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465, // true for 465, false for other ports
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465, // true for 465, false for other ports
     auth: {
-      user,
-      pass,
+      user: smtpUser,
+      pass: smtpPass,
     },
   });
 };
@@ -42,8 +48,10 @@ export async function sendContactNotification(data: ContactFormData): Promise<bo
     return false;
   }
 
-  const adminEmail = process.env.SMTP_USER; // Send to the same email configured
-  const notificationEmail = process.env.NOTIFICATION_EMAIL || adminEmail;
+  if (!notificationEmail) {
+    console.warn('Notification recipient email is not configured (NOTIFICATION_EMAIL or EMAIL_TO).');
+    return false;
+  }
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -314,7 +322,7 @@ Reply to this message by emailing ${data.email}
 
   try {
     await transporter.sendMail({
-      from: `"Portfolio Contact" <${process.env.SMTP_USER}>`,
+      from: `"Portfolio Contact" <${fromEmail}>`,
       to: notificationEmail,
       replyTo: data.email,
       subject: `New Contact: ${data.subject}`,
@@ -337,7 +345,7 @@ export async function testEmailConfig(): Promise<{ success: boolean; message: st
   if (!transporter) {
     return { 
       success: false, 
-      message: 'Email transporter not configured. Check SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables.' 
+      message: 'Email transporter not configured. Check SMTP_HOST/SMTP_USER/SMTP_PASS (or EMAIL_HOST/EMAIL_USER/EMAIL_PASS).'
     };
   }
 

@@ -99,6 +99,8 @@ SMTP_USER=your_email@gmail.com
 SMTP_PASS=your_app_password
 EMAIL_FROM=your_email@gmail.com
 EMAIL_TO=your_email@gmail.com
+# Optional aliases supported by code:
+# EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, NOTIFICATION_EMAIL
 
 # Cloudinary Configuration
 CLOUDINARY_CLOUD_NAME=your_cloud_name
