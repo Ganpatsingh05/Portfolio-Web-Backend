@@ -69,37 +69,50 @@ router.put('/', authenticateAdmin, [
     if (inputData.quote !== undefined) dbData.description = inputData.quote;
     if (inputData.social_links !== undefined) dbData.social_links = inputData.social_links;
 
-    // Check if record exists
-    const { data: existingHero } = await supabase
+    // Check if a hero record exists already
+    const { data: existingHero, error: existingHeroError } = await supabase
       .from('hero_section')
-      .select('id')
+      .select('*')
       .limit(1)
       .maybeSingle();
 
-    let result;
-    if (existingHero) {
+    if (existingHeroError) throw existingHeroError;
+
+    let result: any = null;
+    if (existingHero?.id) {
       // Update existing
       const { data: hero, error } = await supabase
         .from('hero_section')
         .update(dbData)
         .eq('id', existingHero.id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       result = hero;
-    } else {
-      // Create new - ensure name is provided
-      if (!dbData.name) {
+    }
+
+    // If no row was updated (or no existing row), create a new singleton row.
+    if (!result) {
+      const createData: Record<string, any> = { ...dbData };
+      if (!createData.name && existingHero?.name) {
+        createData.name = existingHero.name;
+      }
+
+      if (!createData.name) {
         return res.status(400).json({ error: 'Name is required to create hero section' });
       }
+
       const { data: hero, error } = await supabase
         .from('hero_section')
-        .insert([dbData])
+        .insert([createData])
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!hero) {
+        throw new Error('Hero record was not returned after insert');
+      }
       result = hero;
     }
 

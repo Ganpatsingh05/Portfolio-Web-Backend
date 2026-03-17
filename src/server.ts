@@ -15,6 +15,7 @@ import publicRouter from './routes/public';
 // Import modular admin routes
 import authRouter from './routes/auth';
 import adminRouter from './routes/admin/index';
+import { testEmailConfig } from './lib/email';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -264,6 +265,19 @@ const server = app.listen(PORT, () => {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`🔗 API URL: http://localhost:${PORT}`);
   }
+
+  // Verify SMTP credentials at startup so contact email issues are detected early.
+  testEmailConfig()
+    .then((result) => {
+      if (result.success) {
+        console.log('📧 Email configuration: OK');
+      } else {
+        console.warn(`⚠️ Email configuration: ${result.message}`);
+      }
+    })
+    .catch((err) => {
+      console.warn(`⚠️ Email configuration check failed: ${err?.message || err}`);
+    });
 });
 
 // Graceful shutdown handling - ensures clean restart

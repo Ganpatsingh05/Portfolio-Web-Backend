@@ -1,11 +1,18 @@
 import nodemailer from 'nodemailer';
 
-const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST;
-const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587', 10);
-const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
+const normalizeEnvValue = (value?: string) => value?.trim() || undefined;
+
+const smtpHost = normalizeEnvValue(process.env.SMTP_HOST || process.env.EMAIL_HOST);
+const parsedSmtpPort = Number.parseInt(normalizeEnvValue(process.env.SMTP_PORT || process.env.EMAIL_PORT) || '587', 10);
+const smtpPort = Number.isNaN(parsedSmtpPort) ? 587 : parsedSmtpPort;
+const smtpUser = normalizeEnvValue(process.env.SMTP_USER || process.env.EMAIL_USER);
+const rawSmtpPass = normalizeEnvValue(process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD);
+const smtpPass = smtpHost?.includes('gmail.com')
+  ? rawSmtpPass?.replace(/\s+/g, '')
+  : rawSmtpPass;
 const fromEmail = process.env.EMAIL_FROM || smtpUser;
 const notificationEmail = process.env.NOTIFICATION_EMAIL || process.env.EMAIL_TO || smtpUser;
+let emailAuthFailed = false;
 
 // Create reusable transporter
 const createTransporter = () => {
@@ -16,6 +23,10 @@ const createTransporter = () => {
     if (!smtpPass) missing.push('SMTP_PASS/EMAIL_PASS');
     console.warn(`⚠️ Email configuration incomplete (missing: ${missing.join(', ')}). Email notifications will be disabled.`);
     return null;
+  }
+
+  if (smtpHost.includes('gmail.com') && rawSmtpPass && rawSmtpPass !== smtpPass) {
+    console.warn('⚠️ Gmail app password contained spaces and was normalized automatically.');
   }
 
   return nodemailer.createTransport({
@@ -45,6 +56,11 @@ interface ContactFormData {
 export async function sendContactNotification(data: ContactFormData): Promise<boolean> {
   if (!transporter) {
     console.warn('Email transporter not configured, skipping notification');
+    return false;
+  }
+
+  if (emailAuthFailed) {
+    console.warn('Email notifications are temporarily disabled due to SMTP auth failure. Restart server after fixing credentials.');
     return false;
   }
 
@@ -332,7 +348,14 @@ Reply to this message by emailing ${data.email}
 
     console.log(`✅ Email notification sent for contact from ${data.email}`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'EAUTH' || error?.responseCode === 535) {
+      emailAuthFailed = true;
+      console.error('❌ SMTP authentication failed (EAUTH/535).');
+      console.error('   Verify SMTP_USER and SMTP_PASS. For Gmail, use a 16-character App Password (not your normal account password).');
+      return false;
+    }
+
     console.error('❌ Failed to send email notification:', error);
     return false;
   }

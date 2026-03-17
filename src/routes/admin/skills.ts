@@ -34,6 +34,7 @@ router.post('/', authenticateAdmin, [
   body('name').notEmpty().withMessage('Skill name is required'),
   body('level').isInt({ min: 0, max: 100 }).withMessage('Level must be between 0 and 100'),
   body('category').notEmpty().withMessage('Category is required'),
+  body('icon_url').optional({ nullable: true }).isString(),
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -60,6 +61,7 @@ router.put('/:id', authenticateAdmin, [
   body('name').optional().notEmpty(),
   body('level').optional().isInt({ min: 0, max: 100 }),
   body('category').optional().notEmpty(),
+  body('icon_url').optional({ nullable: true }).isString(),
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
