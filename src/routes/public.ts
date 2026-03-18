@@ -101,6 +101,21 @@ router.get('/skills', async (req: Request, res: Response) => {
   }
 });
 
+// Public: soft skills
+router.get('/soft-skills', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('soft_skills')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    return ok(res, data || []);
+  } catch (err) {
+    console.error('Public soft skills error:', err);
+    res.status(500).json({ error: 'Failed to fetch soft skills' });
+  }
+});
+
 // Public: experiences
 router.get('/experiences', async (req: Request, res: Response) => {
   try {

@@ -3,6 +3,7 @@ import { Router } from 'express';
 // Import admin route modules
 import projectsRouter from './projects';
 import skillsRouter from './skills';
+import softSkillsRouter from './soft-skills';
 import experiencesRouter from './experiences';
 import messagesRouter from './messages';
 import personalRouter from './personal';
@@ -16,6 +17,7 @@ const router = Router();
 // Mount admin routes
 router.use('/projects', projectsRouter);
 router.use('/skills', skillsRouter);
+router.use('/soft-skills', softSkillsRouter);
 router.use('/experiences', experiencesRouter);
 router.use('/messages', messagesRouter);
 router.use('/personal-info', personalRouter);
