@@ -16,6 +16,7 @@ import publicRouter from './routes/public';
 import authRouter from './routes/auth';
 import adminRouter from './routes/admin/index';
 import { testEmailConfig } from './lib/email';
+import supabase from './lib/supabase';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -144,6 +145,31 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// DB keepalive endpoint for external cron monitors
+app.get('/api/ping-db', async (req: Request, res: Response) => {
+  try {
+    const { error } = await supabase
+      .from('settings')
+      .select('key')
+      .limit(1);
+
+    if (error) throw error;
+
+    res.json({
+      status: 'ok',
+      message: 'Supabase active',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('DB ping error:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'DB ping failed',
+      error: err?.message || 'Unknown error'
+    });
+  }
+});
+
 // API routes
 app.use('/api/contact', contactRouter);
 app.use('/api/analytics', analyticsRouter);
@@ -164,6 +190,7 @@ app.get('/api/_endpoints', (req: Request, res: Response) => {
     // Health
     { method: 'GET', path: '/health', public: true },
     { method: 'GET', path: '/api/health', public: true },
+    { method: 'GET', path: '/api/ping-db', public: true },
     // Public content
     { method: 'GET', path: '/api/personal-info', public: true },
     { method: 'GET', path: '/api/projects', public: true },
