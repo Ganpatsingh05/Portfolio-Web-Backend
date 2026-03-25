@@ -379,6 +379,11 @@ Reply to this message by emailing ${data.email}
       }
     }
 
+    if (error?.code === 'ETIMEDOUT' && error?.command === 'CONN') {
+      console.error(`❌ SMTP connection timeout to ${smtpHost}:${smtpPort} (secure=${smtpSecure}).`);
+      console.error('   This is usually an outbound network restriction from the hosting provider to SMTP endpoints.');
+    }
+
     if (error?.code === 'EAUTH' || error?.responseCode === 535) {
       emailAuthFailed = true;
       console.error('❌ SMTP authentication failed (EAUTH/535).');

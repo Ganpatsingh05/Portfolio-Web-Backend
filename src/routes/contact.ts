@@ -4,6 +4,7 @@ import supabase from '../lib/supabase';
 import { sendContactNotification } from '../lib/email';
 
 const router = Router();
+const EMAIL_SEND_TIMEOUT_MS = Number.parseInt(process.env.EMAIL_SEND_TIMEOUT_MS || '6000', 10);
 
 // List of disposable email domains
 const disposableEmailDomains = [
@@ -68,9 +69,9 @@ router.post('/', [
     try {
       const emailTimeout = new Promise<boolean>((resolve) =>
         setTimeout(() => {
-          console.warn('⚠️ Email sending timed out after 10 seconds');
+          console.warn(`⚠️ Email sending timed out after ${EMAIL_SEND_TIMEOUT_MS}ms`);
           resolve(false);
-        }, 10000) // 10 second timeout
+        }, EMAIL_SEND_TIMEOUT_MS)
       );
 
       emailSent = await Promise.race([
