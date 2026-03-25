@@ -63,9 +63,20 @@ router.post('/', [
     }
 
     // Send email notification (do not fail entire request if delivery fails)
+    // Add timeout to prevent email sending from blocking the request
     let emailSent = false;
     try {
-      emailSent = await sendContactNotification({ name, email, subject, message, phone });
+      const emailTimeout = new Promise<boolean>((resolve) =>
+        setTimeout(() => {
+          console.warn('⚠️ Email sending timed out after 10 seconds');
+          resolve(false);
+        }, 10000) // 10 second timeout
+      );
+
+      emailSent = await Promise.race([
+        sendContactNotification({ name, email, subject, message, phone }),
+        emailTimeout
+      ]);
     } catch (err) {
       console.error('Email notification error:', err);
     }
