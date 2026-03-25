@@ -5,6 +5,8 @@ const normalizeEnvValue = (value?: string) => value?.trim() || undefined;
 const smtpHost = normalizeEnvValue(process.env.SMTP_HOST || process.env.EMAIL_HOST);
 const parsedSmtpPort = Number.parseInt(normalizeEnvValue(process.env.SMTP_PORT || process.env.EMAIL_PORT) || '587', 10);
 const smtpPort = Number.isNaN(parsedSmtpPort) ? 587 : parsedSmtpPort;
+const explicitSecure = normalizeEnvValue(process.env.SMTP_SECURE)?.toLowerCase();
+const smtpSecure = explicitSecure === undefined ? smtpPort === 465 : explicitSecure === 'true';
 const smtpUser = normalizeEnvValue(process.env.SMTP_USER || process.env.EMAIL_USER);
 const rawSmtpPass = normalizeEnvValue(process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD);
 const smtpPass = smtpHost?.includes('gmail.com')
@@ -32,7 +34,10 @@ const createTransporter = () => {
   return nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
-    secure: smtpPort === 465, // true for 465, false for other ports
+    secure: smtpSecure,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
     auth: {
       user: smtpUser,
       pass: smtpPass,
@@ -336,19 +341,44 @@ ${data.message}
 Reply to this message by emailing ${data.email}
   `.trim();
 
-  try {
-    await transporter.sendMail({
+  const mailOptions = {
       from: `"Portfolio Contact" <${fromEmail}>`,
       to: notificationEmail,
       replyTo: data.email,
       subject: `New Contact: ${data.subject}`,
       text: textContent,
       html: htmlContent,
-    });
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
 
     console.log(`✅ Email notification sent for contact from ${data.email}`);
     return true;
   } catch (error: any) {
+    if (error?.code === 'ETIMEDOUT' && error?.command === 'CONN' && smtpHost?.includes('gmail.com') && smtpPort !== 465) {
+      console.warn('⚠️ SMTP connection timeout on primary Gmail transport. Retrying with SSL port 465...');
+      try {
+        const fallbackTransporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: 465,
+          secure: true,
+          connectionTimeout: 15000,
+          greetingTimeout: 10000,
+          socketTimeout: 20000,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
+        await fallbackTransporter.sendMail(mailOptions);
+        console.log(`✅ Email notification sent via Gmail SSL fallback for ${data.email}`);
+        return true;
+      } catch (fallbackError: any) {
+        console.error('❌ Gmail SSL fallback also failed:', fallbackError);
+      }
+    }
+
     if (error?.code === 'EAUTH' || error?.responseCode === 535) {
       emailAuthFailed = true;
       console.error('❌ SMTP authentication failed (EAUTH/535).');
