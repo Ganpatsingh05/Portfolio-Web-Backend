@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer';
 
 const normalizeEnvValue = (value?: string) => value?.trim() || undefined;
+const EMAIL_PROVIDER = normalizeEnvValue(process.env.EMAIL_PROVIDER || 'auto')?.toLowerCase();
+const resendApiKey = normalizeEnvValue(process.env.RESEND_API_KEY);
+const resendApiBaseUrl = normalizeEnvValue(process.env.RESEND_API_BASE_URL) || 'https://api.resend.com';
 
 const smtpHost = normalizeEnvValue(process.env.SMTP_HOST || process.env.EMAIL_HOST);
 const parsedSmtpPort = Number.parseInt(normalizeEnvValue(process.env.SMTP_PORT || process.env.EMAIL_PORT) || '587', 10);
@@ -55,20 +58,55 @@ interface ContactFormData {
   phone?: string;
 }
 
+interface MailPayload {
+  from: string;
+  to: string;
+  replyTo: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+const useResend = Boolean(resendApiKey) && (EMAIL_PROVIDER === 'auto' || EMAIL_PROVIDER === 'resend');
+
+async function sendViaResend(payload: MailPayload): Promise<boolean> {
+  if (!resendApiKey) return false;
+
+  try {
+    const response = await fetch(`${resendApiBaseUrl}/emails`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: payload.from,
+        to: [payload.to],
+        reply_to: payload.replyTo,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => 'Unable to parse error body');
+      console.error(`❌ Resend API error: ${response.status} ${response.statusText} | ${body}`);
+      return false;
+    }
+
+    console.log('✅ Email notification sent via Resend API');
+    return true;
+  } catch (error: any) {
+    console.error('❌ Resend request failed:', error?.message || error);
+    return false;
+  }
+}
+
 /**
  * Send email notification for new contact form submission
  */
 export async function sendContactNotification(data: ContactFormData): Promise<boolean> {
-  if (!transporter) {
-    console.warn('Email transporter not configured, skipping notification');
-    return false;
-  }
-
-  if (emailAuthFailed) {
-    console.warn('Email notifications are temporarily disabled due to SMTP auth failure. Restart server after fixing credentials.');
-    return false;
-  }
-
   if (!notificationEmail) {
     console.warn('Notification recipient email is not configured (NOTIFICATION_EMAIL or EMAIL_TO).');
     return false;
@@ -341,7 +379,7 @@ ${data.message}
 Reply to this message by emailing ${data.email}
   `.trim();
 
-  const mailOptions = {
+  const mailOptions: MailPayload = {
       from: `"Portfolio Contact" <${fromEmail}>`,
       to: notificationEmail,
       replyTo: data.email,
@@ -349,6 +387,26 @@ Reply to this message by emailing ${data.email}
       text: textContent,
       html: htmlContent,
   };
+
+  if (useResend) {
+    const sentViaResend = await sendViaResend(mailOptions);
+    if (sentViaResend) return true;
+    if (EMAIL_PROVIDER === 'resend') {
+      console.error('❌ Email provider is set to resend but delivery failed.');
+      return false;
+    }
+    console.warn('⚠️ Resend delivery failed. Falling back to SMTP transport.');
+  }
+
+  if (!transporter) {
+    console.warn('Email transporter not configured, skipping notification');
+    return false;
+  }
+
+  if (emailAuthFailed) {
+    console.warn('Email notifications are temporarily disabled due to SMTP auth failure. Restart server after fixing credentials.');
+    return false;
+  }
 
   try {
     await transporter.sendMail(mailOptions);
@@ -400,6 +458,13 @@ Reply to this message by emailing ${data.email}
  * Test email configuration
  */
 export async function testEmailConfig(): Promise<{ success: boolean; message: string }> {
+  if (useResend) {
+    return {
+      success: true,
+      message: `Email provider ready: Resend (${EMAIL_PROVIDER === 'resend' ? 'forced' : 'auto mode'})`
+    };
+  }
+
   if (!transporter) {
     return { 
       success: false, 
